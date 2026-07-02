@@ -1,0 +1,670 @@
+
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>在庫管理🐶🐵🦆🐦‍⬛🦉</title>
+<style>
+    /* ベース */
+    body{
+      font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+      margin: 20px;
+      background: #f6fbfb;
+      color: #0b2a2f;
+    }
+    h1{
+      background-color: #003B46;
+      border-radius: 12px;
+      text-align: center;
+      color: white;
+      padding: 14px;
+      margin-bottom: 20px;
+    }
+    /* グリッド（カード一覧） */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    /* カード */
+    .card {
+      background: linear-gradient(180deg,#ffffff,#f3f9f9);
+      border: 1px solid #d7e8e8;
+      border-radius: 10px;
+      padding: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 110px;
+      transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+    .card-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+    }
+    .item-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: #054f52;
+      text-align: left;
+      flex:1;
+      margin-right:8px;
+    }
+    /* ボタン（品名を編集する） */
+    .open-popup {
+      background: #07575B;
+      color: white;
+      border: 0;
+      border-radius: 6px;
+      padding: 6px 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .open-popup:active { transform: translateY(1px); }
+    /* 数量表示 */
+    .qty-box {
+      margin-top: 12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .qty-label {
+      font-size: 13px;
+      color: #2b595a;
+    }
+    .qty-value {
+      background: #e9f5f5;
+      border: 1px solid #cfecec;
+      padding: 8px 12px;
+      border-radius: 8px;
+      min-width:48px;
+      text-align:center;
+      font-weight:700;
+      color:#07383a;
+    }
+    /* 在庫が閾値未満のときのスタイル（より濃い赤） */
+    .card.low-stock {
+      background: linear-gradient(180deg,#ffecec,#ffd6d6); /* 濃めの赤 */
+      border-color: #ff8b8b;
+      box-shadow: 0 2px 12px rgba(255,80,80,0.14);
+    }
+    .card.low-stock .item-name { color: #5b1010; }
+    .card.low-stock .qty-value { background:#ffecec; border-color:#ffbdbd; color:#5b1010; }
+    /* ポップアップ（編集） */
+    #popup-wrapper{
+      display:none;
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,0.4);
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    #popup-inside{
+      background: #fff;
+      padding: 18px;
+      border-radius: 10px;
+      min-width: 280px;
+      max-width: 95%;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+      position: relative;
+    }
+    #popup-title{ margin:0 0 8px 0; font-size:18px; color:#052f30; }
+    #popup-inside p{ margin:0 0 10px 0; }
+    #close{
+      position:absolute;
+      right:8px;
+      top:8px;
+      border:0;
+      background:transparent;
+      font-size:20px;
+      cursor:pointer;
+    }
+    .counter{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:center;
+      margin-top:8px;
+    }
+    .counter button{
+      width:44px;
+      height:40px;
+      border-radius:8px;
+      border:1px solid #cfecec;
+      background:#f7ffff;
+      font-size:20px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .counter button:active { transform: translateY(1px); }
+    #value{
+      min-width:56px;
+      text-align:center;
+      font-size:18px;
+      font-weight:700;
+    }
+    #confirm{
+      background:#07575B;
+      color:white;
+      border:0;
+      padding:8px 12px;
+      border-radius:8px;
+      cursor:pointer;
+    }
+    /* 警告用ポップアップ（低在庫の通知） */
+    #alert-wrapper{
+      display:none;
+      position:fixed;
+      inset:0;
+      background: rgba(0,0,0,0.35);
+      align-items:center;
+      justify-content:center;
+      z-index:3000;
+    }
+    #alert-box{
+      background:#fff7f7;
+      border:1px solid #f1caca;
+      color:#7a1f1f;
+      padding:18px;
+      border-radius:10px;
+      max-width:400px;
+      box-shadow:0 8px 30px rgba(250,150,150,0.12);
+      text-align:center;
+    }
+    #alert-box p{ margin:0 0 12px 0; font-size:16px; }
+    #alert-close{
+      background:#7a1f1f;
+      color:white;
+      border:0;
+      padding:8px 12px;
+      border-radius:8px;
+      cursor:pointer;
+    }
+    /* レスポンシブ微調整 */
+    @media (max-width:420px){
+      .grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+      .card { padding:10px; }
+    }
+</style>
+</head>
+<body>
+<h1>在庫管理表</h1>
+<div class="grid" id="items-grid">
+<!-- インク類 -->
+<div class="card">
+<div class="card-header">
+<div class="item-name">インクカートリッジ（黒）</div>
+<button class="open-popup" data-key="stock_ink_black" data-target="ink-b">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="ink-b" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">インクカートリッジ（赤）</div>
+<button class="open-popup" data-key="stock_ink_red" data-target="ink-r">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="ink-r" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">インクカートリッジ（青）</div>
+<button class="open-popup" data-key="stock_ink_blue" data-target="ink-bl">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="ink-bl" class="qty-value">0</div>
+</div>
+</div>
+<!-- 以下、その他の項目 -->
+<div class="card">
+<div class="card-header">
+<div class="item-name">実習日誌</div>
+<button class="open-popup" data-key="stock_doc_jisshu" data-target="d-jisshu">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-jisshu" class="qty-value">0</div>
+</div>
+</div>
+<!-- （省略せずに他のカードもあなたのまま残しています） -->
+<div class="card">
+<div class="card-header">
+<div class="item-name">委員会議事録</div>
+<button class="open-popup" data-key="stock_doc_iinkai_gijiroku" data-target="d-gijiroku">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-gijiroku" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">委員会要望書</div>
+<button class="open-popup" data-key="stock_doc_iinkai_youbou" data-target="d-youbou">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-youbou" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">討議シート</div>
+<button class="open-popup" data-key="stock_doc_tougi" data-target="d-tougi">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-tougi" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">鍵持ち出し記録表</div>
+<button class="open-popup" data-key="stock_doc_key_log" data-target="d-keylog">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-keylog" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">ICカード再発行申請書</div>
+<button class="open-popup" data-key="stock_doc_ic_reissue" data-target="d-ic">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-ic" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">バス紛失届</div>
+<button class="open-popup" data-key="stock_doc_bus_lost" data-target="d-bus">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-bus" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">学割証交付願</div>
+<button class="open-popup" data-key="stock_doc_student_discount" data-target="d-stud">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-stud" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">すまいるプラン解約・一部払出申請書</div>
+<button class="open-popup" data-key="stock_doc_smile_cancel" data-target="d-smile-cancel">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-smile-cancel" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">購入品注文票（安全靴・その他）</div>
+<button class="open-popup" data-key="stock_doc_purchase_order" data-target="d-purchase">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-purchase" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">健康保険証再交付申請書</div>
+<button class="open-popup" data-key="stock_doc_health_reissue" data-target="d-health">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-health" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">ハッピーライフ請求通知書</div>
+<button class="open-popup" data-key="stock_doc_happylife" data-target="d-happy">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-happy" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">すまいるプラン期初・期中申請書</div>
+<button class="open-popup" data-key="stock_doc_smile_period" data-target="d-smile-period">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-smile-period" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">立替明細書</div>
+<button class="open-popup" data-key="stock_doc_tatekae" data-target="d-tatekae">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-tatekae" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">科技高証明書交付願</div>
+<button class="open-popup" data-key="stock_doc_tech_cert" data-target="d-techcert">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-techcert" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">各種試験支払依頼書</div>
+<button class="open-popup" data-key="stock_doc_exam_payment" data-target="d-exam">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-exam" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">パスポート申請ご案内</div>
+<button class="open-popup" data-key="stock_doc_passport" data-target="d-passport">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-passport" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">住民票・印鑑証明・戸籍謄本（抄本）</div>
+<button class="open-popup" data-key="stock_doc_certs" data-target="d-certs">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-certs" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">冠婚葬祭・特別外泊許可証</div>
+<button class="open-popup" data-key="stock_doc_special_leave" data-target="d-specialleave">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-specialleave" class="qty-value">0</div>
+</div>
+</div>
+<div class="card">
+<div class="card-header">
+<div class="item-name">創意工夫（創意くふう）</div>
+<button class="open-popup" data-key="stock_doc_creative" data-target="d-creative">編集</button>
+</div>
+<div class="qty-box">
+<div class="qty-label">数量</div>
+<div id="d-creative" class="qty-value">0</div>
+</div>
+</div>
+</div>
+<!-- 共通ポップアップ（編集） -->
+<div id="popup-wrapper" role="dialog" aria-modal="true" style="display:none;">
+<div id="popup-inside">
+<button id="close" aria-label="閉じる">×</button>
+<h2 id="popup-title">編集</h2>
+<p>数量を調整してください</p>
+<div class="counter" role="group" aria-label="数量操作">
+<button id="dec-btn" aria-label="減らす">ー</button>
+<div id="value" aria-live="polite">0</div>
+<button id="inc-btn" aria-label="増やす">＋</button>
+</div>
+<div style="display:flex; justify-content:flex-end; margin-top:12px;">
+<button id="confirm">決定</button>
+</div>
+</div>
+</div>
+<!-- 警告ポップアップ（低在庫の通知） -->
+<div id="alert-wrapper" aria-live="polite" role="alert" style="display:none;">
+<div id="alert-box">
+<p id="alert-message">指導員に報告し在庫補充してください。</p>
+<div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+<button id="alert-close">閉じる</button>
+</div>
+</div>
+</div>
+<script>
+    // 閾値（この値未満なら低在庫扱い）
+    const LOW_STOCK_THRESHOLD = 6;
+    // 長押しの設定
+    const HOLD_INITIAL_DELAY = 400; // 長押し開始までの遅延(ms)
+    const HOLD_REPEAT_INTERVAL = 80; // 長押し時の繰り返し間隔(ms)
+    // 共通要素取得（存在チェックも行う）
+    const popupWrapper = document.getElementById('popup-wrapper');
+    const closeBtn = document.getElementById('close');
+    const confirmBtn = document.getElementById('confirm');
+    const incBtn = document.getElementById('inc-btn');
+    const decBtn = document.getElementById('dec-btn');
+    const valueEl = document.getElementById('value');
+    const popupTitle = document.getElementById('popup-title');
+    const alertWrapper = document.getElementById('alert-wrapper');
+    const alertMessage = document.getElementById('alert-message');
+    const alertClose = document.getElementById('alert-close');
+    // 現在操作中のコンテキスト
+    let current = {
+      key: null,
+      targetEl: null,
+      count: 0,
+      staging: 0
+    };
+    // 低在庫通知の表示管理
+    let alertVisible = false;
+    // 長押し用タイマー管理
+    let holdTimeoutId = null;
+    let holdIntervalId = null;
+    // localStorage ユーティリティ
+    function loadCount(key, fallback = 0) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw !== null) {
+          const n = Number(raw);
+          return Number.isFinite(n) ? n : fallback;
+        }
+      } catch (e) {
+        // private mode 等で失敗する可能性
+      }
+      return fallback;
+    }
+    function saveCount(key, n) {
+      try {
+        localStorage.setItem(key, String(n));
+      } catch (e) { /* ignore */ }
+    }
+    // 低在庫アラート表示
+    function showLowStockAlert(message) {
+      if (alertVisible) return;
+      alertVisible = true;
+      if (alertMessage) alertMessage.textContent = message || '指導員に報告し在庫補充してください。';
+      if (alertWrapper) alertWrapper.style.display = 'flex';
+    }
+    function hideLowStockAlert() {
+      if (alertWrapper) alertWrapper.style.display = 'none';
+      alertVisible = false;
+    }
+    // ターゲット表示更新（カードの low-stock クラス切替）
+    function updateTargetDisplay(targetEl, n) {
+      if (!targetEl) return;
+      targetEl.textContent = String(n);
+      const card = typeof targetEl.closest === 'function' ? targetEl.closest('.card') : null;
+      if (card) {
+        if (n < LOW_STOCK_THRESHOLD) {
+          card.classList.add('low-stock');
+          showLowStockAlert('指導員に報告し在庫補充してください。');
+        } else {
+          card.classList.remove('low-stock');
+        }
+      }
+    }
+    // ポップアップを開く（編集ボタンクリック時）
+    function openPopupFor(button) {
+      if (!button) return;
+      const key = button.dataset.key;
+      const targetId = button.dataset.target;
+      const targetEl = targetId ? document.getElementById(targetId) : null;
+      current.key = key || null;
+      current.targetEl = targetEl;
+      const fallback = targetEl ? Number(targetEl.textContent) || 0 : 0;
+      current.count = loadCount(current.key || '', fallback);
+      current.staging = current.count;
+      if (popupTitle) popupTitle.textContent = (button.closest?.('.card')?.querySelector('.item-name')?.textContent) || button.textContent || '編集';
+      if (valueEl) valueEl.textContent = String(current.staging);
+      if (popupWrapper) popupWrapper.style.display = 'flex';
+      if (incBtn) incBtn.focus();
+    }
+    // ポップアップ表示更新
+    function updatePopupDisplay() {
+      if (valueEl) valueEl.textContent = String(current.staging);
+    }
+    function increase() {
+      current.staging++;
+      updatePopupDisplay();
+    }
+    function decrease() {
+      if (current.staging > 0) {
+        current.staging--;
+        updatePopupDisplay();
+      }
+    }
+    // 長押し開始（actionFn を最初に1回実行し遅延後繰り返す）
+    function startHold(actionFn) {
+      if (holdTimeoutId || holdIntervalId) return;
+      actionFn();
+      holdTimeoutId = setTimeout(() => {
+        holdIntervalId = setInterval(() => {
+          actionFn();
+        }, HOLD_REPEAT_INTERVAL);
+      }, HOLD_INITIAL_DELAY);
+    }
+    function stopHold() {
+      if (holdTimeoutId) {
+        clearTimeout(holdTimeoutId);
+        holdTimeoutId = null;
+      }
+      if (holdIntervalId) {
+        clearInterval(holdIntervalId);
+        holdIntervalId = null;
+      }
+    }
+    // 編集ボタンにイベント登録
+    document.querySelectorAll('.open-popup').forEach(btn => {
+      btn.addEventListener('click', () => openPopupFor(btn));
+    });
+    // ポップアップ外クリックで閉じる（キャンセル）
+    if (popupWrapper) {
+      popupWrapper.addEventListener('click', e => {
+        if (e.target === popupWrapper) {
+          popupWrapper.style.display = 'none';
+        }
+      });
+    }
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        if (popupWrapper) popupWrapper.style.display = 'none';
+      });
+    }
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!current.key) {
+          if (popupWrapper) popupWrapper.style.display = 'none';
+          return;
+        }
+        current.count = current.staging;
+        saveCount(current.key, current.count);
+        updateTargetDisplay(current.targetEl, current.count);
+        if (popupWrapper) popupWrapper.style.display = 'none';
+        current.key = null;
+        current.targetEl = null;
+      });
+    }
+    // pointer イベントで増減を一元管理（クリックと長押しの重複回避）
+    if (incBtn) {
+      incBtn.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        startHold(increase);
+      });
+      ['pointerup','pointercancel','pointerleave'].forEach(name => {
+        incBtn.addEventListener(name, stopHold);
+      });
+    }
+    if (decBtn) {
+      decBtn.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        startHold(decrease);
+      });
+      ['pointerup','pointercancel','pointerleave'].forEach(name => {
+        decBtn.addEventListener(name, stopHold);
+      });
+    }
+    if (alertClose) {
+      alertClose.addEventListener('click', hideLowStockAlert);
+    }
+    // ページ読み込み時に localStorage を反映し、low-stock を適用
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.open-popup').forEach(btn => {
+        const key = btn.dataset.key;
+        const targetId = btn.dataset.target;
+        const targetEl = targetId ? document.getElementById(targetId) : null;
+        if (!key || !targetEl) return;
+        const n = loadCount(key, Number(targetEl.textContent) || 0);
+        updateTargetDisplay(targetEl, n);
+      });
+    });
+    // 他タブでの変更を検知して反映
+    window.addEventListener('storage', (event) => {
+      if (!event.key) return;
+      if (!event.key.startsWith('stock_')) return;
+      const newVal = event.newValue !== null ? Number(event.newValue) : 0;
+      const parsed = Number.isFinite(newVal) ? newVal : 0;
+      // 更新対象を探して表示を更新
+      document.querySelectorAll('.open-popup').forEach(btn => {
+        if (btn.dataset.key === event.key) {
+          const targetId = btn.dataset.target;
+          const targetEl = targetId ? document.getElementById(targetId) : null;
+          if (targetEl) updateTargetDisplay(targetEl, parsed);
+        }
+      });
+      // 編集中のアイテムと一致すればポップアップ内も更新
+      if (current.key === event.key) {
+        current.count = parsed;
+        current.staging = parsed;
+        updatePopupDisplay();
+      }
+    });
+</script>
+</body>
+</html>
